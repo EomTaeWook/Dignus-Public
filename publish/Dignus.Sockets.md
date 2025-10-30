@@ -1,5 +1,7 @@
 # Dignus.Sockets
 
+> **Benchmark:** [View Performance Results →](https://github.com/EomTaeWook/ServerPerformanceBenchmark)
+
 **High-performance, event-driven async socket framework focused on throughput, zero-copy I/O, and GC-free execution.**  
 Built for scalable real-time servers through modular, allocation-free architecture.
 
