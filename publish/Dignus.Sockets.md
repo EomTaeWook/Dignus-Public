@@ -133,6 +133,7 @@ public void Process(JoinGameRoom req) { ... }
 - Middleware-based handler extension
 - Modular and scalable architecture
 
+---
+
 **Dignus.Sockets** — lightweight, allocation-free, and built for real-time performance.
 
----
