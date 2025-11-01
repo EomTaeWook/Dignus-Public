@@ -5,25 +5,35 @@ Provides fast format rendering, pluggable targets (console, file, database), and
 
 ---
 
+## Overview
+
+`Dignus.Log` is a high-performance, allocation-free logging framework that integrates with the Dignus ecosystem.  
+It offers a flexible, attribute-driven configuration model with built-in console, file, and database targets.  
+All log operations are buffered and designed for zero-GC execution in high-frequency environments.
+
+---
+
 ## Highlights
 
 - **Zero-GC Logging:** Buffered and pooled string operations for allocation-free output  
 - **Flexible Formatting:** `${symbol[:format]}` pattern pipeline (e.g., datetime, level, message, callsite)  
 - **Attribute-Based Mapping:** `[LogElement("...")]`, `[LogTarget("...")]` enable automatic discovery  
 - **Multi-Target Routing:** Log messages distributed to multiple outputs per configuration rules  
-- **Dependency Injection Integration:** Targets are resolved via `Dignus.DependencyInjection`  
+- **Dependency Injection Integration:** Targets resolved via `Dignus.DependencyInjection`  
 - **Graceful Shutdown:** Buffered writes automatically flushed and targets disposed on exit  
 
 ---
 
 ## Built-in Format Elements
 
-- `datetime` — timestamp with customizable format  
-- `level` — log severity level  
-- `message` — log message content  
-- `callsite` — file path and line number (`filePath : lineNumber`)  
-- `callerFileName`, `callerFilePath`, `callerLineNumber` — detailed caller info  
-- `literal` — static text literal for fixed separators or symbols  
+| Element | Description |
+| :--- | :--- |
+| `datetime` | Timestamp with customizable format |
+| `level` | Log severity level |
+| `message` | Log message text |
+| `callsite` | File path and line number (`filePath : lineNumber`) |
+| `callerFileName` / `callerFilePath` / `callerLineNumber` | Detailed caller info |
+| `literal` | Static text literal for fixed separators or symbols |
 
 ---
 
@@ -37,18 +47,56 @@ Provides fast format rendering, pluggable targets (console, file, database), and
 
 ---
 
-## Design Principles
+## Example Usage
 
-- **Zero Allocation:** All formatting and dispatching minimize GC pressure  
-- **Precompiled Rendering:** Log elements mapped to compiled delegates instead of reflection  
-- **Extensible Pipeline:** Add new log elements or targets with simple attribute declarations  
-- **Safe Concurrency:** Buffered writes with lock-free signaling and atomic flush  
-- **Simple Integration:** Single configuration file, automatically bound through DI  
+### Manual Configuration
+```csharp
+var logPath = "./logs/UnityLogFile.txt";
+var archivePath = "./logs/archive/UnityLogFile.{#}.txt";
 
----
+var logConfig = new LogConfiguration();
 
-## Configuration Example
+var fileTarget = new FileLogTarget()
+{
+    ArchiveFileName = archivePath,
+    ArchiveRollingType = FileRollingType.Day,
+    AutoFlush = true,
+    KeepOpenFile = true,
+    LogFileName = logPath,
+    MaxArchiveFile = 7,
+    LogFormatRenderer = new LogFormatRenderer()
+};
+fileTarget.LogFormatRenderer.SetLogFormat("${datetime} | ${message} | ${callerFileName} : ${callerLineNumber}");
 
+var fileRule = new LoggerRule("unity logger", LogLevel.Fatal, fileTarget);
+logConfig.AddLogRule("file rule", fileRule);
+
+var unityTarget = new UnityLogTarget();
+var unityRule = new LoggerRule("unity logger", LogLevel.Debug, unityTarget);
+logConfig.AddLogRule("unity console rule", unityRule);
+
+LogBuilder.Configuration(logConfig);
+LogBuilder.Build();
+
+LogHelper.SetLogger(LogManager.GetLogger("unity logger"));
+LogHelper.Debug("log initialized");
+```
+
+### XML Configuration
+```csharp
+LogBuilder.Configuration(LogConfigXmlReader.Load($"DignusLog.{stage}.config"))
+           .Build();
+LogHelper.Debug("example message");
+```
+
+### Typical Output
+```csharp
+2025-11-02 19:45:22.481 | log initialized | MainSceneController.cs : 83
+2025-11-02 19:45:23.509 | user connected  | NetworkManager.cs : 42
+2025-11-02 19:45:24.731 | error occurred  | BattleScene.cs : 120
+```
+
+### Configuration Example (XML)
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -91,10 +139,15 @@ Provides fast format rendering, pluggable targets (console, file, database), and
 </configuration>
 ```
 
-## Summary
+## Design Principles
 
-- Attribute-driven, zero-GC logging engine  
-- Configurable multi-target output (console, file, database)  
-- Flexible format syntax with expression-free rendering  
-- Safe concurrent write with buffered flushing  
-- Ideal for performance-critical applications and real-time services
+- **Zero Allocation:** All formatting and dispatching minimize GC pressure  
+- **Precompiled Rendering:** Log elements mapped to compiled delegates instead of reflection  
+- **Extensible Pipeline:** Add new log elements or targets with simple attribute declarations  
+- **Safe Concurrency:** Buffered writes with lock-free signaling and atomic flush  
+- **Simple Integration:** Single configuration file, automatically bound through DI  
+
+---
+
+**Dignus.Log** — high-performance, extensible, and allocation-free logging engine.  
+Ideal for performance-critical systems, real-time servers, and Unity-based projects.
