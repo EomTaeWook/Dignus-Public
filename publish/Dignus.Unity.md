@@ -1,53 +1,166 @@
 # Dignus.Unity
 
 **Lightweight Unity extension built on top of the Dignus framework.**  
-Provides efficient coroutine management, pooling, and DI-ready scene architecture for scalable Unity projects.
+Provides dependency injection, coroutine management, pooling, and DI-ready scene architecture for scalable Unity projects.
 
 ---
 
-## Features
+## Overview
+
+`Dignus.Unity` is a lightweight and extensible Unity framework built to streamline large-scale game architecture.  
+It offers dependency injection, coroutine scheduling, resource and object pooling, and scene-based architecture with reactive data binding.
+
+---
+
+## Core Features
 
 | Feature | Description |
 | :--- | :--- |
-| **Coroutine Manager** | High-performance `IEnumerator`-based coroutine scheduler for Unity environments |
-| **Object Pooling** | Reusable pool system for `GameObject` and `Component` instances to minimize allocations |
-| **Dependency Injection** | DI-ready service container for in-game systems and controllers |
-| **Scene System** | Base controller architecture with async loading, scene events, and state binding |
-| **Bindable Property** | Reactive property system for data-driven UI and gameplay logic |
-| **Resource Management** | Centralized prefab and resource loader with path-based access |
+| **Dependency Injection** | Lightweight DI via `DignusUnityServiceContainer` |
+| **Scene Architecture** | Structured scene controllers with `SceneControllerBase<TScene, TModel>` |
+| **Coroutine Manager** | High-performance coroutine scheduler using `DignusUnityCoroutineManager` |
+| **Object Pooling** | Reuse `GameObject` and `Component` instances via `DignusUnityObjectPool` |
+| **Resource Management** | Centralized prefab and asset handling with `DignusUnityResourceManager` |
+| **Reactive Binding** | `BindableProperty<T>` system for UI and gameplay data synchronization |
+| **Singleton System** | Simple and persistent lifecycle management for runtime managers |
+| **Async Scene Flow** | `DignusUnitySceneManager` for async scene transitions and initialization |
 
 ---
 
-## Core APIs
+## Manager Overview
 
-| API | Purpose |
-| :--- | :--- |
-| `DignusUnityCoroutineManager` | Manages coroutines with high performance and low GC pressure |
-| `DignusUnityObjectPool` | Generic pooling system for Unity objects |
-| `SceneControllerBase<TScene, TModel>` | Base class for structured, DI-friendly scene controllers |
-| `DignusUnityServiceContainer` | Lightweight service container for Unity dependency management |
-| `DignusUnityResourceManager` | Handles prefab loading, caching, and resource lifecycle |
-| `BindableProperty<T>` | Provides reactive, bindable data structures for UI and gameplay |
-| `DignusUnitySceneManager` | Coordinates async scene loading and transitions |
+### DignusUnityCoroutineManager
+```csharp
+DignusUnityCoroutineManager.Start(MyCoroutine());
+```
 
----
+Efficient coroutine handler that executes enumerators or coroutine handles with optional delay and completion callbacks.
+Internally updates via FixedUpdate to ensure stable timing without GC allocations.
 
-## Highlights
+### DignusUnityObjectPool
+```csharp
+var bullet = DignusUnityObjectPool.Instance.Pop(prefab);
+DignusUnityObjectPool.Instance.Push(bullet);
+```
 
-- **Zero-GC Focus:** Designed to minimize allocations during scene transitions and gameplay  
-- **Extensible Architecture:** Works seamlessly with `Dignus.Core` and `Dignus.DependencyInjection`  
-- **Runtime Efficiency:** Pooling and binding systems reduce CPU/GPU load spikes  
-- **Maintainable Scene Flow:** Structured controllers encourage modular scene logic  
-- **Unity-Native Design:** Integrates directly with Unity’s lifecycle without extra dependencies  
+Reuses and manages pooled GameObject instances to minimize runtime allocations.
+Supports both GameObject and Component-based access.
 
----
+### DignusUnityResourceManager
+```csharp
+var prefab = DignusUnityResourceManager.Instance.LoadAsset<MyPrefab>();
+```
 
-## Summary
+Loads assets from Unity’s Resources folder with internal caching and prefab-path attribute support.
 
-- Lightweight Unity integration layer for the Dignus framework  
-- Efficient coroutine, pooling, and DI-based scene control  
-- Reactive data binding with `BindableProperty`  
-- Optimized for zero-GC, scalable runtime performance  
-- Suitable for large Unity projects and service-type architectures  
+### DignusUnitySceneManager
+```csharp
+DignusUnitySceneManager.Instance.LoadScene(SceneType.LobbyScene.ToString());
+```
 
----
+Handles asynchronous scene transitions, scene lifecycle events, and current scene registration.
+
+### UnityServiceContainer
+```csharp
+var container = DignusUnityServiceContainer.RegisterDependencies(typeof(LobbySceneController).Assembly);
+container.Build();
+```
+
+Dependency injection container specialized for Unity — supports runtime object construction with argument injection.
+
+## Example: Lobby Scene Architecture
+### Controller
+```csharp
+[Injectable(LifeScope.Singleton)]
+public class LobbySceneController : SceneControllerBase<LobbyScene, LobbySceneModel>
+{
+    private readonly GameClientService _gameClientService;
+    private readonly UserService _userService;
+
+    public LobbySceneController(GameClientService gameClientService, UserService userService)
+    {
+        _userService = userService;
+        _gameClientService = gameClientService;
+    }
+
+    public void OnAwake()
+    {
+        Model.CurrentPlayer = new GamePlayer()
+        {
+            AccountId = _userService.GetUserModel().AccountId,
+            Nickname = _userService.GetUserModel().Nickname
+        };
+    }
+
+    public void RoomListRequest(int page, int size)
+    {
+        _gameClientService.Send(Packet.MakePacket(CGSProtocol.GetRoomList, new GetRoomList()
+        {
+            Page = page,
+            ItemSize = size
+        }));
+    }
+
+    public override void Dispose()
+    {
+        Model.LobbyRoomInfos.Clear();
+    }
+}
+
+```
+
+### Model
+```csharp
+public class LobbySceneModel : ISceneModel
+{
+    public Dictionary<int, ArrayQueue<RoomListItemUI>> LobbyRoomInfos { get; set; } = new();
+    public GamePlayer CurrentPlayer { get; set; }
+    public List<PlayerModel> RoomMembers { get; set; }
+    public int JoinRoomNumber { get; set; }
+}
+```
+
+### Scene
+```csharp
+public class LobbyScene : SceneBase<LobbySceneController>
+{
+    private LobbyUI _lobbyUI;
+
+    protected override void OnAwakeScene()
+    {
+        SceneController.OnAwake();
+        _lobbyUI = UIManager.Instance.AddUI<LobbyUI>();
+        _lobbyUI.Init(SceneController);
+    }
+
+    public override void OnDestroyScene()
+    {
+        UIManager.Instance.RemoveUI(_lobbyUI);
+        SceneController.Dispose();
+    }
+}
+```
+
+
+### Example Scene Flow
+```csharp
+// Dependency Setup
+var container = DignusUnityServiceContainer.RegisterDependencies(typeof(LobbySceneController).Assembly);
+container.Build();
+
+// Load Scene with DI Controller
+DignusUnitySceneManager.Instance.LoadScene<LobbyScene>(SceneType.LobbyScene);
+
+```
+
+### Highlights
+
+Zero-GC Scene Flow – Optimized for stable runtime performance
+
+Reactive UI – BindableProperty updates UI automatically
+
+Extensible Architecture – Seamlessly integrates with Dignus.Core and Dignus.DependencyInjection
+
+Unity-Native Lifecycle – Works directly with Awake, Start, and OnDestroy
+
+Production Ready – Designed for scalability and maintainability
