@@ -1,61 +1,62 @@
-# Dignus
+# Dignus.Core
 
-**High-performance modular core library focused on runtime efficiency and GC avoidance.**  
-Provides allocation-free collections, deterministic coroutine scheduling, lightweight DI, and extensible framework utilities.
+**Foundation layer of the Dignus framework**  
+Provides core runtime utilities such as dependency injection, coroutine scheduling, collections, object pooling, and pipeline systems.  
+All modules in the Dignus ecosystem depend on this base library.
+
+---
+
+## Overview
+
+- Core of the Dignus ecosystem, providing fundamental abstractions and utilities.  
+- Includes lightweight DI, coroutine engine, memory-safe collections, thread-safe variants, and object pooling.  
+- Designed for **zero-GC**, **deterministic**, and **high-throughput** execution environments.
+
+---
+
+## Namespaces
+
+| Namespace | Description |
+| :--- | :--- |
+| **Dignus.Collections** | Zero-GC collections including ArrayQueue, CompactableArrayQueue, and UniqueSet. |
+| **Dignus.Coroutine** | Lightweight coroutine handler with deterministic updates. |
+| **Dignus.DependencyInjection** | Minimal DI container with constructor and property injection support. |
+| **Dignus.Framework** | Object pooling, singleton, and pipeline utilities for performance-critical systems. |
 
 ---
 
 ## Modules
 
-| Module | Description |
-| :--- | :--- |
-| **Collections** | High-performance, allocation-free data structures designed to minimize GC overhead |
-| **Coroutine** | Lightweight coroutine scheduler for deterministic async operations without async/await |
-| **DependencyInjection** | Minimal DI container using expression tree compilation for fast runtime resolution |
-| **Framework** | Middleware pipeline, object pooling, and singleton utilities for efficient runtime control |
+### Dignus.Collections
+Contains zero-allocation, array-based and set-based data structures.
 
----
+- `ArrayQueue<T>` — expandable queue optimized for sequential reads/writes.  
+- `CompactableArrayQueue<T>` — auto-compacting queue that reuses cleared slots.  
+- `UniqueSet<T>` — custom hash-based unique collection with minimal allocation.  
+- `SynchronizedArrayQueue<T>` / `SynchronizedUniqueSet<T>` — thread-safe wrappers.
 
-## Highlights
+### Dignus.Coroutine
+Implements allocation-free coroutine scheduling.
 
-- **Zero Allocation:** Core components designed to avoid garbage collection in steady state  
-- **Performance-Oriented:** Expression tree compilation replaces reflection for faster runtime execution  
-- **Extensible:** Modular and composable structure adaptable to various architectures  
-- **Thread-Safe:** Synchronized variants provided where concurrency is required  
-- **Lightweight:** Pure .NET implementation, no external dependencies  
+- `CoroutineHandle` — represents an active coroutine instance.  
+- `CoroutineHandler` — manages coroutine lifecycles and nested enumerators.  
+- `DelayInSeconds`, `DelayInMilliseconds`, `WaitWhile` — built-in wait conditions.
 
----
+### Dignus.DependencyInjection
+Minimal, high-speed dependency injection framework.
 
-## Components
+- `ServiceContainer`, `ServiceProvider`, `ServiceCollection` — container infrastructure.  
+- `ServiceRegistration` — metadata for registered services and factories.  
+- `LifeScope` — defines lifetime (`Transient` / `Singleton`).  
+- `ConstructorDelegateFactory` — generates expression-based constructor delegates.  
+- `InjectableAttribute`, `InjectAttribute`, `InjectConstructorAttribute` — attribute-driven registration.  
+- `ServiceContainerExtensions`, `ServiceCollectionExtensions`, `ServiceProviderExtensions` — helper APIs for simplified registration and resolution.
 
-### Collections
-- `ArrayQueue<T>`, `CompactableArrayQueue<T>` — zero-copy, expandable queues  
-- `UniqueSet<T>` — allocation-free hash set implementation  
-- Thread-safe variants: `SynchronizedArrayQueue<T>`, `SynchronizedUniqueSet<T>`
+### Dignus.Framework
+Utility layer providing reusable object and execution management systems.
 
-### Coroutine
-- `CoroutineHandler`, `CoroutineHandle` — deterministic coroutine scheduler  
-- Built-in waits: `DelayInSeconds`, `DelayInMilliseconds`, `WaitWhile`  
-- Zero-GC execution, supports nested coroutines and completion callbacks
-
-### DependencyInjection
-- Supports constructor and property injection  
-- Attribute-based setup via `[Injectable]`, `[InjectConstructor]`  
-- Lifetime management: `Transient` / `Singleton`  
-- Reflection-free resolution using expression tree-compiled factories  
-
-### Framework
-- **Pipeline:** `RefMiddlewarePipeline<TContext>` — ref-based middleware chain without allocation  
-- **ObjectPool:** allocation-free instance reuse with internal tracking  
-- **Singleton:** thread-safe, lazy initialization utility  
-
----
-
-## Key Advantages
-
-- Designed for GC-free execution under load  
-- Optimized for high-performance, low-latency environments  
-- Simple, extensible, and dependency-free architecture  
-- Ideal for performance-critical systems and real-time frameworks  
+- `ObjectPoolBase<T>` / `ObjectPool<T>` — memory-stable pooling mechanism.  
+- `Singleton<T>` — thread-safe lazy singleton helper.  
+- `RefMiddlewarePipeline<TContext>` — reference-passing pipeline system with delegate-based middleware (`DelegateRefMiddleware`, `PipelineNext`).
 
 ---
