@@ -16,8 +16,8 @@ Built for scalable real-time servers with modular, allocation-free design.
 | **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `ClientBase` |
 | **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
 | **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `IPacketHandler` |
-| **Protocol Pipeline** | Attribute-mapped handlers with middleware extension. | `ProtocolHandlerMapper`, `ProtocolPipelineInvoker` |
-| **Session Extensibility** | Per-session components for custom logic. | `ISessionComponent` |
+| **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolPipelineInvoker` |
+| **Session Extensibility** | Custom components per session for modular logic. | `ISessionComponent` |
 
 ---
 
@@ -31,25 +31,13 @@ for **allocation-free** and **thread-safe** network operations.
 
 ### 2. Protocol Layer
 Handles **packet framing, serialization, and dispatching** between the socket and user-defined logic.  
-This layer separates **Send** and **Receive** clearly for performance and flexibility.
-
-#### Receive Path
-- Implemented via `IPacketHandler`
-- Parses buffered bytes and invokes registered handlers  
-- Supports both **stateful** and **stateless** models
-
-| Type | Description | Base Class |
-| :--- | :--- | :--- |
-| **Stateful Handler** | Keeps per-session state during packet processing. | `PacketHandlerBase` |
-| **Stateless Handler** | Uses session context per packet, reentrant. | `StatelessPacketHandlerBase` |
-
-```csharp
-_packetHandler.OnReceived(this, _receivedBuffer);
-```
+The layer provides clear separation between **Send** and **Receive** for performance and flexibility.
 
 #### Send Path
 - Implemented via `IPacketSerializer`
 - Converts a structured `IPacket` into a sendable byte buffer
+- Used by `Session.Send()` to enqueue data into the `SendBuffer`
+- The send path remains **zero-copy** and lock-protected for thread safety
 
 ```csharp
 public interface IPacketSerializer
@@ -58,18 +46,127 @@ public interface IPacketSerializer
 }
 ```
 
-### 3. Dispatch Layer
-Combines **expression-based handler mapping** with **middleware pipelines**  
-for high-speed and extensible protocol processing.
+#### Receive Path
+
+Now fully **asynchronous**, using `Task`-based processing for incoming packets.
 
 ```csharp
-ProtocolPipelineInvoker<Ctx, Handler, string>.Use<MyProtocol>((m, p) =>
+public interface IPacketHandler
 {
-    p.Use<LoggingMiddleware>();
-});
-
-ProtocolPipelineInvoker<Ctx, Handler, string>.Execute(packetId, ref context);
+    Task OnReceivedAsync(ISession session, ArrayQueue<byte> buffer);
+}
 ```
+
+The session calls `OnReceivedAsync()` whenever new bytes are received.
+
+---
+
+### 3. Packet Handler Implementations
+
+#### Stateful Packet Handler
+Maintains per-session state while processing packets.
+
+```csharp
+public abstract class PacketHandlerBase : IPacketHandler
+{
+    public abstract bool TakeReceivedPacket(ArrayQueue<byte> buffer,
+        out ArraySegment<byte> packet, out int consumedBytes);
+
+    public abstract Task ProcessPacketAsync(ArraySegment<byte> packet);
+
+    async Task IPacketHandler.OnReceivedAsync(ISession session, ArrayQueue<byte> buffer)
+    {
+        while (true)
+        {
+            if (session.GetSocket() == null)
+                return;
+
+            if (TakeReceivedPacket(buffer, out var packet, out var consumed))
+            {
+                await ProcessPacketAsync(packet);
+                buffer.Advance(consumed);
+            }
+            else break;
+
+            if (buffer.Count == 0)
+                break;
+        }
+    }
+}
+```
+
+#### Stateless Packet Handler
+Does not maintain internal state; each packet is processed independently.
+
+```csharp
+public abstract class StatelessPacketHandlerBase : IPacketHandler
+{
+    public abstract bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
+        out ArraySegment<byte> packet, out int consumedBytes);
+
+    public abstract Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet);
+
+    async Task IPacketHandler.OnReceivedAsync(ISession session, ArrayQueue<byte> buffer)
+    {
+        while (true)
+        {
+            if (session.GetSocket() == null)
+                return;
+
+            if (TakeReceivedPacket(session, buffer, out var packet, out var consumed))
+            {
+                await ProcessPacketAsync(session, packet);
+                buffer.Advance(consumed);
+            }
+            else break;
+
+            if (buffer.Count == 0)
+                break;
+        }
+    }
+}
+```
+
+---
+
+### 4. Dispatch Layer
+Now fully **asynchronous**.
+
+`ProtocolHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.  
+`ProtocolPipelineInvoker` executes those handlers through an async pipeline.
+
+```csharp
+await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
+```
+
+#### Context Definition Example
+```csharp
+public struct MiddlewareContext : IPipelineContext<MyHandler, string>
+{
+    public int Protocol { get; init; }
+    public MyHandler Handler { get; init; }
+    public string Body { get; init; }
+}
+```
+
+#### Configuring Pipelines
+```csharp
+ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
+    .Use<MyProtocol>((method, pipeline) =>
+    {
+        // Optional custom middleware
+        pipeline.Use(async (ref MiddlewareContext ctx, ref AsyncPipelineNext<MiddlewareContext> next) =>
+        {
+            Console.WriteLine($"Protocol {ctx.Protocol} invoked");
+            await next.InvokeAsync(ref ctx);
+        });
+    });
+
+// Execute pipeline
+await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
+```
+
+---
 
 ## Example Flow
 
@@ -79,61 +176,25 @@ _serverModule = new ServerModule(
     new SessionConfiguration(MakeSerializersFuncForClient),
     ServerEndpointInfo.Port);
 ```
+
+### Handler Example
 ```csharp
-ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-    .Use<CGSProtocol>((method, pipeline) =>
-    {
-        var filters = method.GetCustomAttributes<ActionAttribute>();
-        var orderedFilters = filters.OrderBy(r => r.Order).ToList();
-        var filtersMiddleware = new ProtocolActionMiddleware(orderedFilters);
-        pipeline.Use(filtersMiddleware);
-    });
-```
-
-### Packet Handling
-```csharp
-public abstract class PacketHandlerBase : IPacketHandler
-{
-    public abstract bool TakeReceivedPacket(ArrayQueue<byte> buffer,
-        out ArraySegment<byte> packet, out int consumedBytes);
-
-    public abstract void ProcessPacket(in ArraySegment<byte> packet);
-}
-```
-Example derived implementation:
-```csharp
-public override void ProcessPacket(in ArraySegment<byte> packet)
-{
-    int protocol = BitConverter.ToInt16(packet);
-    var body = Encoding.UTF8.GetString(packet.Array, packet.Offset + 2, packet.Count - 2);
-
-    var context = new MiddlewareContext()
-    {
-        Body = body,
-        Handler = _protocolHandler,
-        Protocol = protocol,
-    };
-
-    ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-        .Execute(protocol, ref context);
-}
-```
-
-### Handler
-```csharp
+[Auth]
 [ProtocolName("JoinGameRoom")]
-public void Process(JoinGameRoom req) { ... }
+public void Process(JoinGameRoom req) 
+{
+    // Custom logic here
+}
 ```
-
-## Design Principles
-
-- Zero-Copy, Zero-GC Networking
-- Clear separation of Send / Receive paths
-- Precompiled protocol dispatch or Optimized delegate-based dispatch
-- Middleware-based handler extension
-- Modular and scalable architecture
 
 ---
 
-**Dignus.Sockets** — lightweight, allocation-free, and built for real-time performance.
+## Design Principles
 
+- Async and Zero-GC Networking  
+- Clear separation of Send / Receive paths  
+- Precompiled or delegate-based protocol dispatch  
+- Middleware-based handler extension  
+- Modular, allocation-free architecture  
+
+---
