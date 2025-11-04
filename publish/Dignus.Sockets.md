@@ -64,7 +64,9 @@ The session calls `OnReceivedAsync()` whenever new bytes are received.
 ### 3. Packet Handler Implementations
 
 #### Stateful Packet Handler
-Maintains per-session state while processing packets.
+Used when a session maintains state across multiple packets.
+
+Override these two methods:
 
 ```csharp
 public abstract class PacketHandlerBase : IPacketHandler
@@ -73,30 +75,13 @@ public abstract class PacketHandlerBase : IPacketHandler
         out ArraySegment<byte> packet, out int consumedBytes);
 
     public abstract Task ProcessPacketAsync(ArraySegment<byte> packet);
-
-    async Task IPacketHandler.OnReceivedAsync(ISession session, ArrayQueue<byte> buffer)
-    {
-        while (true)
-        {
-            if (session.GetSocket() == null)
-                return;
-
-            if (TakeReceivedPacket(buffer, out var packet, out var consumed))
-            {
-                await ProcessPacketAsync(packet);
-                buffer.Advance(consumed);
-            }
-            else break;
-
-            if (buffer.Count == 0)
-                break;
-        }
-    }
 }
 ```
 
 #### Stateless Packet Handler
-Does not maintain internal state; each packet is processed independently.
+Used when packets can be processed independently of session state.
+
+Override these two methods:
 
 ```csharp
 public abstract class StatelessPacketHandlerBase : IPacketHandler
@@ -105,27 +90,11 @@ public abstract class StatelessPacketHandlerBase : IPacketHandler
         out ArraySegment<byte> packet, out int consumedBytes);
 
     public abstract Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet);
-
-    async Task IPacketHandler.OnReceivedAsync(ISession session, ArrayQueue<byte> buffer)
-    {
-        while (true)
-        {
-            if (session.GetSocket() == null)
-                return;
-
-            if (TakeReceivedPacket(session, buffer, out var packet, out var consumed))
-            {
-                await ProcessPacketAsync(session, packet);
-                buffer.Advance(consumed);
-            }
-            else break;
-
-            if (buffer.Count == 0)
-                break;
-        }
-    }
 }
 ```
+
+Both implementations internally handle buffering, advancing, and async processing  
+via `IPacketHandler.OnReceivedAsync()`.
 
 ---
 
