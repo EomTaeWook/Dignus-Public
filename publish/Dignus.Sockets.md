@@ -108,6 +108,21 @@ Now fully **asynchronous**.
 await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
 ```
 
+```csharp
+await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
+```
+
+---
+
+## Example Flow
+
+### Session Setup
+```csharp
+_serverModule = new ServerModule(
+    new SessionConfiguration(MakeSerializersFuncForClient),
+    ServerEndpointInfo.Port);
+```
+
 #### Context Definition Example
 ```csharp
 public struct MiddlewareContext : IPipelineContext<MyHandler, string>
@@ -133,17 +148,6 @@ ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
 
 // Execute pipeline
 await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
-```
-
----
-
-## Example Flow
-
-### Session Setup
-```csharp
-_serverModule = new ServerModule(
-    new SessionConfiguration(MakeSerializersFuncForClient),
-    ServerEndpointInfo.Port);
 ```
 
 ### Handler Example
