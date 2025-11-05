@@ -57,6 +57,7 @@ Utility layer providing reusable object and execution management systems.
 
 - `ObjectPoolBase<T>` / `ObjectPool<T>` — memory-stable pooling mechanism.  
 - `Singleton<T>` — thread-safe lazy singleton helper.  
-- `RefMiddlewarePipeline<TContext>` — reference-passing pipeline system with delegate-based middleware (`DelegateRefMiddleware`, `PipelineNext`).
-
----
+- `AsyncPipeline<TContext>` — allocation-free async middleware pipeline using ref-based context passing.  
+  - `AsyncPipelineDelegate<TContext>` — delegate signature for middleware functions.  
+  - `AsyncPipelineNext<TContext>` — continuation struct controlling next middleware execution.  
+  - `IAsyncMiddleware<TContext>` / `AsyncHandlerMiddleware<TContext>` — interface and adapter for composing pipelines.  
