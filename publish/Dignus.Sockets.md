@@ -16,7 +16,7 @@ Built for scalable real-time servers with modular, allocation-free design.
 | **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `ClientBase` |
 | **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
 | **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `IPacketHandler` |
-| **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolPipelineInvoker` |
+| **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolSessionHandlerMapper`, `ProtocolPipelineInvoker` |
 | **Session Extensibility** | Custom components per session for modular logic. | `ISessionComponent` |
 
 ---
@@ -66,8 +66,6 @@ The session calls `OnReceivedAsync()` whenever new bytes are received.
 #### Stateful Packet Handler
 Used when a session maintains state across multiple packets.
 
-Override these two methods:
-
 ```csharp
 public abstract class PacketHandlerBase : IPacketHandler
 {
@@ -80,8 +78,6 @@ public abstract class PacketHandlerBase : IPacketHandler
 
 #### Stateless Packet Handler
 Used when packets can be processed independently of session state.
-
-Override these two methods:
 
 ```csharp
 public abstract class StatelessPacketHandlerBase : IPacketHandler
@@ -101,17 +97,36 @@ via `IPacketHandler.OnReceivedAsync()`.
 ### 4. Dispatch Layer
 Now fully **asynchronous**.
 
-`ProtocolHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.  
+`ProtocolHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.
+`ProtocolSessionHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.
 `ProtocolPipelineInvoker` executes those handlers through an async pipeline.
 
 ```csharp
 await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
 ```
-
+```csharp
+await ProtocolSessionHandlerMapper.InvokeHandlerAsync(handler, protocol, session, body);
+```
 ```csharp
 await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
 ```
 
+---
+
+#### Centralized Initialization (`BindAndCreateInvoker`)
+
+For simple and safe pipeline setup, use **`BindAndCreateInvoker`** to automatically **bind handler methods**  
+and **create the terminal invoker delegate** in one call.
+
+```csharp
+// Session-less Handler
+var invoker = ProtocolHandlerMapper<MyHandler, string>
+    .BindAndCreateInvoker<MyContext, MyProtocol>();
+
+// Session Handler
+var sessionInvoker = ProtocolSessionHandlerMapper<MyHandler, string>
+    .BindAndCreateInvoker<MySessionContext, MyProtocol>();
+```
 ---
 
 ## Example Flow
@@ -125,30 +140,48 @@ _serverModule = new ServerModule(
 
 #### Context Definition Example
 ```csharp
+// 1. Session-less Context
 public struct MiddlewareContext : IPipelineContext<MyHandler, string>
 {
     public int Protocol { get; init; }
     public MyHandler Handler { get; init; }
     public string Body { get; init; }
 }
+
+// 2. Session Context
+public struct SessionContext : IPipelineSessionContext<MyHandler, string>
+{
+    public int Protocol { get; init; }
+    public MyHandler Handler { get; init; }
+    public string Body { get; init; }
+    public ISession Session { get; init; }
+}
 ```
 
-#### Configuring Pipelines
+#### Configuring Pipelines (Recommended)
 ```csharp
-ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-    .Use<MyProtocol>((method, pipeline) =>
-    {
-        // Optional custom middleware
-        pipeline.Use(async (ref MiddlewareContext ctx, ref AsyncPipelineNext<MiddlewareContext> next) =>
-        {
-            Console.WriteLine($"Protocol {ctx.Protocol} invoked");
-            await next.InvokeAsync(ref ctx);
-        });
-    });
+// 1. Get the pre-bound invoker
+var handlerInvoker = ProtocolHandlerMapper<CGProtocolHandler, string>
+    .BindAndCreateInvoker<MiddlewareContext, MyProtocol>();
 
-// Execute pipeline
-await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
+// 2. Configure pipeline with middleware
+ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
+    .Use<MyProtocol>(
+        handlerInvoker,
+        (method, pipeline) =>
+        {
+            // Optional middleware
+            pipeline.Use(async (ref MiddlewareContext ctx, ref AsyncPipelineNext<MiddlewareContext> next) =>
+            {
+                Console.WriteLine($"Protocol {ctx.Protocol} invoked");
+                await next.InvokeAsync(ref ctx);
+            });
+            // Final handler already bound by handlerInvoker
+        });
 ```
+
+---
+
 
 ### Handler Example
 ```csharp
@@ -157,6 +190,76 @@ await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protoco
 public void Process(JoinGameRoom req) 
 {
     // Custom logic here
+}
+```
+
+---
+
+### 5. Dispatch Flow Example (Runtime Execution)
+
+The packet handler connects the low-level socket receive loop  
+with the high-level protocol execution pipeline.
+
+```csharp
+using Dignus.Collections;
+using Dignus.Log;
+using Dignus.Sockets;
+using Dignus.Sockets.Interfaces;
+using Dignus.Sockets.Processing;
+using System.Text;
+
+internal class PacketHandler : StatelessPacketHandlerBase
+{
+    private const int HeaderSize = sizeof(int);
+    private const int ProtocolSize = sizeof(ushort);
+
+    private readonly CSProtocolHandler _protocolHandler;
+    public PacketHandler(CSProtocolHandler csProtocolHandler)
+    {
+        _protocolHandler = csProtocolHandler;
+    }
+
+    public override bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
+        out ArraySegment<byte> packet, out int consumedBytes)
+    {
+        packet = null;
+        consumedBytes = 0;
+        if (buffer.Count < HeaderSize)
+            return false;
+
+        var bodySize = BitConverter.ToInt32(buffer.Peek(HeaderSize));
+        if (buffer.Count < HeaderSize + bodySize)
+            return false;
+
+        buffer.TryReadBytes(out _, HeaderSize);
+        consumedBytes = bodySize;
+        return buffer.TrySlice(out packet, bodySize);
+    }
+
+    public override async Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet)
+    {
+        var protocol = BitConverter.ToInt16(packet);
+
+        if (ProtocolHandlerMapper.ValidateProtocol<CSProtocolHandler>(protocol) == false)
+        {
+            LogHelper.Error($"[Server] Invalid protocol: {protocol}");
+            return;
+        }
+
+        var body = Encoding.UTF8.GetString(
+            packet.Array, packet.Offset + ProtocolSize, packet.Count - ProtocolSize);
+
+        var context = new PipeContext()
+        {
+            Handler = _protocolHandler,
+            Session = session,
+            Protocol = protocol,
+            Body = body
+        };
+
+        await ProtocolPipelineInvoker<PipeContext, CSProtocolHandler, string>
+            .ExecuteAsync(protocol, ref context);
+    }
 }
 ```
 
