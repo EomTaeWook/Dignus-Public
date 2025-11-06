@@ -113,23 +113,115 @@ await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protoco
 
 ---
 
-#### Centralized Initialization (`BindAndCreateInvoker`)
-
-For simple and safe pipeline setup, use **`BindAndCreateInvoker`** to automatically **bind handler methods**  
-and **create the terminal invoker delegate** in one call.
+### 5. Direct Mapper Usage
+If you prefer not to use a binder or pipeline, you can bind handlers manually using mappers.
 
 ```csharp
-// Session-less Handler
-var invoker = ProtocolHandlerMapper<MyHandler, string>
-    .BindAndCreateInvoker<MyContext, MyProtocol>();
+// Session-less handler example
+ProtocolHandlerMapper<MyHandler, string>.BindProtocol<MyProtocol>();
+await ProtocolHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, body);
 
-// Session Handler
-var sessionInvoker = ProtocolSessionHandlerMapper<MyHandler, string>
-    .BindAndCreateInvoker<MySessionContext, MyProtocol>();
+// Session-based handler example
+ProtocolSessionHandlerMapper<MyHandler, string>.BindProtocol<MyProtocol>();
+await ProtocolSessionHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, session, body);
 ```
+
+**When to use:**  
+- Rapid testing or simple systems  
+- No middleware required  
+- You want direct control over binding and invocation
+
 ---
 
-## Example Flow
+### 6. Binder Interfaces and Implementations
+
+For large-scale or modular servers, binders automate handler binding and invoker creation.
+
+```csharp
+// IProtocolInvokerBinder.cs
+public interface IProtocolInvokerBinder<TContext> where TContext : struct
+{
+    HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
+        where TProtocol : struct, Enum;
+}
+```
+
+```csharp
+// ProtocolHandlerBinder.cs
+public class ProtocolHandlerBinder<TContext, THandler, TBody> : IProtocolInvokerBinder<TContext>
+    where TContext : struct, IPipelineContext<THandler, TBody>
+    where THandler : IProtocolHandler<TBody>
+{
+    public HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
+        where TProtocol : struct, Enum
+    {
+        ProtocolHandlerMapper<THandler, TBody>.BindProtocol<TProtocol>();
+
+        return (ref TContext context) =>
+        {
+            return ProtocolHandlerMapper<THandler, TBody>.InvokeHandlerAsync(
+                context.Handler,
+                context.Protocol,
+                context.Body);
+        };
+    }
+}
+```
+
+```csharp
+// ProtocolSessionHandlerBinder.cs
+public class ProtocolSessionHandlerBinder<THandler, TBody, TContext> 
+    : IProtocolInvokerBinder<TContext>
+    where TContext : struct, IPipelineSessionContext<THandler, TBody>
+    where THandler : IProtocolHandler<TBody>
+{
+    public HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
+        where TProtocol : struct, Enum
+    {
+        ProtocolSessionHandlerMapper<THandler, TBody>.BindProtocol<TProtocol>();
+
+        return (ref TContext context) =>
+        {
+            return ProtocolSessionHandlerMapper<THandler, TBody>.InvokeHandlerAsync(
+                context.Handler,
+                context.Protocol,
+                context.Session,
+                context.Body);
+        };
+    }
+}
+```
+
+---
+
+### 7. Configuring Pipelines (Recommended)
+
+Use the **binder-based pipeline builder** for automatic protocol registration  
+and middleware composition in one fluent chain.
+
+```csharp
+ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
+    .Bind<MyProtocol>(new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>())
+    .Use((method, pipeline) =>
+    {
+        // Optional middleware
+        pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
+        {
+            Console.WriteLine($"Protocol {context.Protocol} invoked");
+            return next.InvokeAsync(ref context);
+        });
+    })
+    .Build();
+```
+
+**Pipeline Steps**
+- `Bind<TProtocol>()` → Selects protocol type and binder (session or non-session).  
+- `Use()` → Registers optional middleware (logging, filters, validation).  
+- `Build()` → Finalizes and stores the async pipeline for runtime execution.
+
+---
+
+## 8.Example Flow
 
 ### Session Setup
 ```csharp
@@ -160,24 +252,20 @@ public struct SessionContext : IPipelineSessionContext<MyHandler, string>
 
 #### Configuring Pipelines (Recommended)
 ```csharp
-// 1. Get the pre-bound invoker
-var handlerInvoker = ProtocolHandlerMapper<CGProtocolHandler, string>
-    .BindAndCreateInvoker<MiddlewareContext, MyProtocol>();
+var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>();
+//var sessionBinder = new ProtocolSessionHandlerBinder<SessionContext, CGProtocolHandler, string>();
 
-// 2. Configure pipeline with middleware
 ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-    .Use<MyProtocol>(
-        handlerInvoker,
-        (method, pipeline) =>
+    .Bind<MyProtocol>(binder)
+    .Use((method, pipeline) =>
+    {
+        pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
         {
-            // Optional middleware
-            pipeline.Use(async (ref MiddlewareContext ctx, ref AsyncPipelineNext<MiddlewareContext> next) =>
-            {
-                Console.WriteLine($"Protocol {ctx.Protocol} invoked");
-                await next.InvokeAsync(ref ctx);
-            });
-            // Final handler already bound by handlerInvoker
+            Console.WriteLine($"Protocol {context.Protocol} invoked");
+            return next.InvokeAsync(ref context);
         });
+    })
+    .Build();
 ```
 
 ---
@@ -195,7 +283,7 @@ public void Process(JoinGameRoom req)
 
 ---
 
-### 5. Dispatch Flow Example (Runtime Execution)
+### 9. Dispatch Flow Example (Runtime Execution)
 
 The packet handler connects the low-level socket receive loop  
 with the high-level protocol execution pipeline.
