@@ -1,7 +1,7 @@
 # Dignus.Sockets
+**Dignus.Sockets** is a high-performance **C# TCP server framework** built on an event-driven async socket architecture.  
+Designed for scalable TCP networking, real-time systems, and high-throughput packet processing with zero-copy and GC-free execution.
 
-**High-performance, event-driven async socket framework**  
-focused on **throughput**, **zero-copy I/O**, and **GC-free execution**.  
 Built for scalable real-time servers with modular, allocation-free design.
 
 > **Benchmark:** [View Performance Results →](https://github.com/EomTaeWook/ServerPerformanceBenchmark)  
