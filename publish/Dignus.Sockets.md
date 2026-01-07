@@ -15,7 +15,7 @@ Built for scalable real-time servers with modular, allocation-free design.
 | :--- | :--- | :--- |
 | **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `ClientBase` |
 | **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
-| **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `IPacketHandler` |
+| **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `PacketHandlerBase`, `PacketProcessor` |
 | **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolSessionHandlerMapper`, `ProtocolPipelineInvoker` |
 | **Session Extensibility** | Custom components per session for modular logic. | `ISessionComponent` |
 
@@ -48,26 +48,48 @@ public interface IPacketSerializer
 
 #### Receive Path
 
-Now fully **asynchronous**, using `Task`-based processing for incoming packets.
+Incoming bytes are processed by the internal receive loop
+implemented in `PacketProcessor`.
+
+The framework manages:
+- receive loop execution
+- buffer advancing
+- session lifetime safety
+- async execution boundaries
+
+Users define packet handling behavior
+by implementing either `PacketProcessor` or `PacketHandlerBase`.
+
+### 3. Packet Handling
+
+### PacketProcessor
+
+Provides full access to `ISession` during:
+- packet framing
+- packet processing
+
+Use this when packet handling logic
+requires direct interaction with the session.
 
 ```csharp
-public interface IPacketHandler
+public abstract class PacketProcessor
 {
-    Task OnReceivedAsync(ISession session, ArrayQueue<byte> buffer);
+    protected abstract bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
+        out ArraySegment<byte> packet, out int consumedBytes);
+
+    protected abstract Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet);
 }
 ```
 
-The session calls `OnReceivedAsync()` whenever new bytes are received.
+### PacketHandlerBase
 
----
+A packet-centric abstraction built on top of `PacketProcessor`.
 
-### 3. Packet Handler Implementations
-
-#### Stateful Packet Handler
-Used when a session maintains state across multiple packets.
+- Does not expose `ISession` in method signatures
+- Suitable when session access is not required directly
 
 ```csharp
-public abstract class PacketHandlerBase : IPacketHandler
+public abstract class PacketHandlerBase : PacketProcessor
 {
     public abstract bool TakeReceivedPacket(ArrayQueue<byte> buffer,
         out ArraySegment<byte> packet, out int consumedBytes);
@@ -76,21 +98,12 @@ public abstract class PacketHandlerBase : IPacketHandler
 }
 ```
 
-#### Stateless Packet Handler
-Used when packets can be processed independently of session state.
+### Difference
 
-```csharp
-public abstract class StatelessPacketHandlerBase : IPacketHandler
-{
-    public abstract bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
-        out ArraySegment<byte> packet, out int consumedBytes);
-
-    public abstract Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet);
-}
-```
-
-Both implementations internally handle buffering, advancing, and async processing  
-via `IPacketHandler.OnReceivedAsync()`.
+| Type | Session Access | Responsibility |
+|----|---------------|----------------|
+| PacketProcessor | Yes | Session-aware packet framing and processing |
+| PacketHandlerBase | No | Packet-centric processing without session dependency |
 
 ---
 
