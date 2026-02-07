@@ -1,6 +1,7 @@
 # Dignus.Sockets
-**Dignus.Sockets** is a high-performance **C# TCP server framework** built on an event-driven async socket architecture.  
-Designed for scalable TCP networking, real-time systems, and high-throughput packet processing with zero-copy and GC-free execution.
+**Dignus.Sockets** is a high-performance **C# TCP/TLS server framework** built on an event-driven async socket architecture.  
+Designed for scalable TCP networking, real-time systems, and high-throughput packet processing with allocation-free and GC-minimized execution in the networking hot path.
+
 
 Built for scalable real-time servers with modular, allocation-free design.
 
@@ -13,7 +14,7 @@ Built for scalable real-time servers with modular, allocation-free design.
 
 | Feature | Description | Components |
 | :--- | :--- | :--- |
-| **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `ClientBase` |
+| **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `TlsServerBase`, `ClientBase`, `TlsClientBase` |
 | **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
 | **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `PacketHandlerBase`, `PacketProcessor` |
 | **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolSessionHandlerMapper`, `ProtocolPipelineInvoker` |
@@ -234,7 +235,7 @@ ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
 
 ---
 
-## 8.Example Flow
+## 8. Example Flow
 
 ### Session Setup
 ```csharp
@@ -366,12 +367,13 @@ internal class PacketHandler : StatelessPacketHandlerBase
 
 ---
 
-## Design Principles
+#### Design Principles
 
-- Async and Zero-GC Networking  
-- Clear separation of Send / Receive paths  
-- Precompiled or delegate-based protocol dispatch  
-- Middleware-based handler extension  
-- Modular, allocation-free architecture  
+- Async and allocation-free networking hot paths
+- Optional TLS support without architectural changes
+- Clear separation of Send / Receive paths
+- Precompiled or delegate-based protocol dispatch
+- Middleware-based handler extension
+- Modular, allocation-free architecture
 
 ---
