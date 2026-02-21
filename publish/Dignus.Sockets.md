@@ -117,11 +117,11 @@ Now fully **asynchronous**.
 
 ```csharp
 await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
-```
-```csharp
+
 await ProtocolSessionHandlerMapper.InvokeHandlerAsync(handler, protocol, session, body);
-```
-```csharp
+
+await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(protocol, ref context);
+
 await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
 ```
 
@@ -161,17 +161,17 @@ public interface IProtocolInvokerBinder<TContext> where TContext : struct
 ```
 
 ```csharp
-// ProtocolHandlerBinder.cs
-public class ProtocolHandlerBinder<TContext, THandler, TBody> : IProtocolInvokerBinder<TContext>
-    where TContext : struct, IPipelineContext<THandler, TBody>
+// ProtocolHandlerBinder<TPipelineContext, THandler, TBody>
+public class ProtocolHandlerBinder<TPipelineContext, THandler, TBody> : IProtocolInvokerBinder<TPipelineContext>
+    where TPipelineContext : struct, IPipelineContext<THandler, TBody>
     where THandler : IProtocolHandler<TBody>
 {
-    public HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
+    public HandlerInvokerDelegate<TPipelineContext> BindAndCreateInvoker<TProtocol>()
         where TProtocol : struct, Enum
     {
         ProtocolHandlerMapper<THandler, TBody>.BindProtocol<TProtocol>();
 
-        return (ref TContext context) =>
+        return (ref TPipelineContext context) =>
         {
             return ProtocolHandlerMapper<THandler, TBody>.InvokeHandlerAsync(
                 context.Handler,
@@ -183,23 +183,22 @@ public class ProtocolHandlerBinder<TContext, THandler, TBody> : IProtocolInvoker
 ```
 
 ```csharp
-// ProtocolSessionHandlerBinder.cs
-public class ProtocolSessionHandlerBinder<THandler, TBody, TContext> 
-    : IProtocolInvokerBinder<TContext>
-    where TContext : struct, IPipelineSessionContext<THandler, TBody>
+// ProtocolHandlerBinder<TPipelineContext, THandler, TBody, TState>
+// example ProtocolHandlerBinder<TPipelineContext, THandler, TBody, ISession>
+public class ProtocolHandlerBinder<TPipelineContext, THandler, TBody, TState> : IProtocolInvokerBinder<TPipelineContext>
+    where TPipelineContext : struct, IPipelineContext<THandler, TBody, TState>
     where THandler : IProtocolHandler<TBody>
 {
-    public HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
-        where TProtocol : struct, Enum
+    public HandlerInvokerDelegate<TPipelineContext> BindAndCreateInvoker<TProtocol>() where TProtocol : struct, Enum
     {
-        ProtocolSessionHandlerMapper<THandler, TBody>.BindProtocol<TProtocol>();
+        ProtocolStateHandlerMapper<THandler, TBody, TState>.BindProtocol<TProtocol>();
 
-        return (ref TContext context) =>
+        return (ref TPipelineContext context) =>
         {
-            return ProtocolSessionHandlerMapper<THandler, TBody>.InvokeHandlerAsync(
+            return ProtocolStateHandlerMapper<THandler, TBody, TState>.InvokeHandlerAsync(
                 context.Handler,
                 context.Protocol,
-                context.Session,
+                context.State,
                 context.Body);
         };
     }
@@ -214,6 +213,27 @@ Use the **binder-based pipeline builder** for automatic protocol registration
 and middleware composition in one fluent chain.
 
 ```csharp
+// Recommended: TContext-only facade (simplified execution)
+
+var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>();
+
+//var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string, ISession>(); //State
+
+ProtocolPipelineInvoker<MiddlewareContext>
+    .Bind<CGProtocolHandler, string, MyProtocol>(binder)
+    .Use((method, pipeline) =>
+    {
+        // Optional middleware
+        pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
+        {
+            Console.WriteLine($"Protocol {context.Protocol} invoked");
+            return next.InvokeAsync(ref context);
+        });
+    })
+    .Build();
+
+
+// Legacy: still supported
 ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
     .Bind<MyProtocol>(new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>())
     .Use((method, pipeline) =>
@@ -255,35 +275,14 @@ public struct MiddlewareContext : IPipelineContext<MyHandler, string>
 }
 
 // 2. Session Context
-public struct SessionContext : IPipelineSessionContext<MyHandler, string>
+public struct SessionContext : IPipelineContext<MyHandler, string, ISession>
 {
     public int Protocol { get; init; }
     public MyHandler Handler { get; init; }
     public string Body { get; init; }
-    public ISession Session { get; init; }
+    public ISession State { get; init; }
 }
 ```
-
-#### Configuring Pipelines (Recommended)
-```csharp
-var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>();
-//var sessionBinder = new ProtocolSessionHandlerBinder<SessionContext, CGProtocolHandler, string>();
-
-ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-    .Bind<MyProtocol>(binder)
-    .Use((method, pipeline) =>
-    {
-        pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
-        {
-            Console.WriteLine($"Protocol {context.Protocol} invoked");
-            return next.InvokeAsync(ref context);
-        });
-    })
-    .Build();
-```
-
----
-
 
 ### Handler Example
 ```csharp
@@ -359,8 +358,11 @@ internal class PacketHandler : StatelessPacketHandlerBase
             Body = body
         };
 
-        await ProtocolPipelineInvoker<PipeContext, CSProtocolHandler, string>
-            .ExecuteAsync(protocol, ref context);
+        // Legacy: still supported
+        //await ProtocolPipelineInvoker<PipeContext, CSProtocolHandler, string>.ExecuteAsync(protocol, ref context);
+
+        // Recommended: simplified execution (TContext-only)
+        await ProtocolPipelineInvoker<PipeContext>.ExecuteAsync(protocol, ref context);
     }
 }
 ```
