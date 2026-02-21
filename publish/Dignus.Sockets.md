@@ -120,9 +120,9 @@ await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
 
 await ProtocolSessionHandlerMapper.InvokeHandlerAsync(handler, protocol, session, body);
 
-await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(protocol, ref context);
+await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(ref context);
 
-await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(protocol, ref context);
+await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(ref context);
 ```
 
 ---
@@ -362,7 +362,7 @@ internal class PacketHandler : StatelessPacketHandlerBase
         //await ProtocolPipelineInvoker<PipeContext, CSProtocolHandler, string>.ExecuteAsync(protocol, ref context);
 
         // Recommended: simplified execution (TContext-only)
-        await ProtocolPipelineInvoker<PipeContext>.ExecuteAsync(protocol, ref context);
+        await ProtocolPipelineInvoker<PipeContext>.ExecuteAsync(ref context);
     }
 }
 ```
