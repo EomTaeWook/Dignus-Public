@@ -13,7 +13,7 @@ All modules are designed for performance-critical environments with zero-copy an
 | Module | Description | NuGet |
 | :--- | :--- | :--- |
 | [**Dignus.Core**](./publish/Dignus.Core.md) | Foundation layer with allocation-free collections, deterministic coroutine scheduling, lightweight DI, and framework utilities | [![NuGet](https://img.shields.io/nuget/v/Dignus.svg)](https://www.nuget.org/packages/Dignus) |
-| [**Dignus.Sockets**](./publish/Dignus.Sockets.md) | High-performance **C# TCP/TLS server framework** with event-driven async sockets, zero-copy networking, and optimized TCP protocol pipeline | [![NuGet](https://img.shields.io/nuget/v/Dignus.Sockets.svg)](https://www.nuget.org/packages/Dignus.Sockets) |
+| [**Dignus.Sockets**](./publish/Dignus.Sockets.md) | High-performance C# networking framework supporting **TCP, TLS, and UDP**, built on event-driven async sockets with zero-copy architecture | [![NuGet](https://img.shields.io/nuget/v/Dignus.Sockets.svg)](https://www.nuget.org/packages/Dignus.Sockets) |
 | [**Dignus.Log**](./publish/Dignus.Log.md) | Attribute-driven logging system with configurable targets and zero-GC rendering | [![NuGet](https://img.shields.io/nuget/v/Dignus.Log.svg)](https://www.nuget.org/packages/Dignus.Log) |
 | [**Dignus.Unity**](./publish/Dignus.Unity.md) | Lightweight Unity integration with coroutine, pooling, DI, and reactive scene architecture | [![NuGet](https://img.shields.io/nuget/v/Dignus.Unity.svg)](https://www.nuget.org/packages/Dignus.Unity) |
 
