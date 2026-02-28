@@ -1,6 +1,6 @@
 # Dignus.Sockets
-**Dignus.Sockets** is a high-performance **C# TCP/TLS server framework** built on an event-driven async socket architecture.  
-Designed for scalable TCP networking, real-time systems, and high-throughput packet processing with allocation-free and GC-minimized execution in the networking hot path.
+**Dignus.Sockets** is a high-performance **C# TCP/TLS/UDP server framework** built on an event-driven async socket architecture.  
+Designed for scalable TCP and UDP networking, real-time systems, and high-throughput packet processing with allocation-free and GC-minimized execution in the networking hot path.
 
 
 Built for scalable real-time servers with modular, allocation-free design.
@@ -14,9 +14,9 @@ Built for scalable real-time servers with modular, allocation-free design.
 
 | Feature | Description | Components |
 | :--- | :--- | :--- |
-| **Async Session Model** | Event-driven, per-session TCP model using `SocketAsyncEventArgs`. | `Session`, `ServerBase`, `TlsServerBase`, `ClientBase`, `TlsClientBase` |
+| **Async Session Model** | Event-driven networking model built on SocketAsyncEventArgs. | `Session`, `ServerBase`, `TlsServerBase`, `UdpServerBase`, `ClientBase`, `TlsClientBase`, `UdpClientBase` |
 | **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
-| **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `PacketHandlerBase`, `PacketProcessor` |
+| **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `PacketHandlerBase`, `PacketProcessor`, `UdpPacketProcessor` |
 | **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolSessionHandlerMapper`, `ProtocolPipelineInvoker` |
 | **Session Extensibility** | Custom components per session for modular logic. | `ISessionComponent` |
 
