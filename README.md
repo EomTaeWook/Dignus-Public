@@ -17,6 +17,7 @@ All modules are designed for performance-critical environments with zero-copy an
 | [**Dignus.Log**](./publish/Dignus.Log.md) | Attribute-driven logging system with configurable targets and zero-GC rendering | [![NuGet](https://img.shields.io/nuget/v/Dignus.Log.svg)](https://www.nuget.org/packages/Dignus.Log) |
 | [**Dignus.Unity**](./publish/Dignus.Unity.md) | Lightweight Unity integration with coroutine, pooling, DI, and reactive scene architecture | [![NuGet](https://img.shields.io/nuget/v/Dignus.Unity.svg)](https://www.nuget.org/packages/Dignus.Unity) |
 | [**Dignus.ActorServer**](https://github.com/EomTaeWook/Dignus.ActorServer) | Actor-based scalable server framework built on top of Dignus networking runtime | [![NuGet](https://img.shields.io/nuget/v/Dignus.ActorServer.svg)](https://www.nuget.org/packages/Dignus.ActorServer) |
+| [**Dignus.Commands**](https://github.com/EomTaeWook/Dignus.Commands) | Modular command framework for local and Telnet-based execution, with hierarchical command paths and middleware pipeline support | [![NuGet](https://img.shields.io/nuget/v/Dignus.Commands.svg)](https://www.nuget.org/packages/Dignus.Commands) |
 
 ---
 
