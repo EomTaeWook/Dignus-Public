@@ -34,6 +34,7 @@ Contains zero-allocation, array-based and set-based data structures.
 - `CompactableArrayQueue<T>` — auto-compacting queue that reuses cleared slots.  
 - `UniqueSet<T>` — custom hash-based unique collection with minimal allocation.  
 - `SynchronizedArrayQueue<T>` / `SynchronizedUniqueSet<T>` — thread-safe wrappers.
+- `MpscBoundedQueue<T>` — fixed-capacity multi-producer, single-consumer queue optimized for lock-free enqueue and single-threaded dequeue.
 
 ### Dignus.Coroutine
 Implements allocation-free coroutine scheduling.
