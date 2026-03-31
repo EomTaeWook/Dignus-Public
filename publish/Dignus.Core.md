@@ -1,16 +1,15 @@
 # Dignus.Core
 
-**Foundation layer of the Dignus framework**  
-Provides core runtime utilities such as dependency injection, coroutine scheduling, collections, object pooling, and pipeline systems.  
-All modules in the Dignus ecosystem depend on this base library.
+**Shared runtime foundation for the Dignus ecosystem**  
+Provides the low-level building blocks used across Dignus libraries, including collections, dependency injection, coroutine scheduling, object pooling, and pipeline utilities.
 
 ---
 
 ## Overview
 
-- Core of the Dignus ecosystem, providing fundamental abstractions and utilities.  
-- Includes lightweight DI, coroutine engine, memory-safe collections, thread-safe variants, and object pooling.  
-- Designed for **zero-GC**, **deterministic**, and **high-throughput** execution environments.
+- Base runtime library used by other Dignus modules.  
+- Includes performance-oriented collections, lightweight dependency injection, deterministic coroutine scheduling, and reusable framework utilities.  
+- Designed for performance-oriented runtime systems, with a focus on high-throughput execution.
 
 ---
 
