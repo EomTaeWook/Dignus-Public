@@ -286,11 +286,46 @@ public struct SessionContext : IPipelineContext<MyHandler, string, ISession>
 
 ### Handler Example
 ```csharp
-[Auth]
-[ProtocolName("JoinGameRoom")]
-public void Process(JoinGameRoom req) 
+
+[Injectable(Dignus.DependencyInjection.LifeScope.Transient)]
+public class CGProtocolHandler(HeartBeat heartBeat,
+    RoomManager roomManager) : IProtocolHandler<string>, ISessionComponent
 {
-    // Custom logic here
+    protected ISession _session;
+    public T DeserializeBody<T>(string body)
+    {
+        return JsonSerializer.Deserialize<T>(body);
+    }
+
+    [ProtocolName("SendPong")]
+    public Task Process(SendPong _)
+    {
+        heartBeat.Pong();
+        return Task.CompletedTask;
+    }
+    public void Dispose()
+    {
+        if (_player != null)
+        {
+            if (_player.GameRoom != null)
+            {
+                _gameRoomManager.LeaveRoom(_player);
+            }
+            _gameRoomManager.RemovePlayer(_player);
+            _player = null;
+        }
+        heartBeat.Dispose();
+        _session = null;
+    }
+
+    public void SetSession(ISession session)
+    {
+        _session = session;
+
+        foreach (var component in _session.GetSessionComponents())
+        {
+        }
+    }
 }
 ```
 
