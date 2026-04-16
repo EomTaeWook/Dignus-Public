@@ -1,124 +1,141 @@
 # Dignus.Sockets
-**Dignus.Sockets** is a high-performance **C# TCP/TLS/UDP server framework** built on an event-driven async socket architecture.  
-Designed for scalable TCP and UDP networking, real-time systems, and high-throughput packet processing with allocation-free and GC-minimized execution in the networking hot path.
 
+**Dignus.Sockets** is a high-performance C# TCP/TLS/UDP server framework.  
+It provides async socket processing, custom packet serialization, protocol-based dispatch, and middleware-capable protocol pipelines.
 
-Built for scalable real-time servers with modular, allocation-free design.
-
-> **Benchmark:** [View Performance Results →](https://github.com/EomTaeWook/ServerPerformanceBenchmark)  
-[![Performance Benchmark](https://img.shields.io/badge/Performance-Benchmark-blueviolet?logo=github)](https://github.com/EomTaeWook/ServerPerformanceBenchmark)
+> Benchmark: https://github.com/EomTaeWook/ServerPerformanceBenchmark
 
 ---
 
 ## Features
 
-| Feature | Description | Components |
-| :--- | :--- | :--- |
-| **Async Session Model** | Event-driven networking model built on SocketAsyncEventArgs. | `Session`, `ServerBase`, `TlsServerBase`, `UdpServerBase`, `ClientBase`, `TlsClientBase`, `UdpClientBase` |
-| **Zero-Copy I/O** | Direct buffer read/write without redundant memory copies. | `SendBuffer`, `ArrayQueue` |
-| **Pluggable Protocols** | Custom serialization and packet handling. | `IPacketSerializer`, `PacketHandlerBase`, `PacketProcessor`, `UdpPacketProcessor` |
-| **Async Protocol Pipeline** | Attribute-mapped handlers with middleware extensions. | `ProtocolHandlerMapper`, `ProtocolSessionHandlerMapper`, `ProtocolPipelineInvoker` |
-| **Session Extensibility** | Custom components per session for modular logic. | `ISessionComponent` |
+- Async TCP/TLS/UDP networking
+- Custom packet framing and serialization
+- Protocol-based handler dispatch
+- Direct mapper-based invocation
+- Binder-based pipeline builder
+- Optional middleware composition
+- Session component model
 
 ---
 
-## Architecture
+## Quick Start
 
-### 1. I/O Layer
-Non-blocking I/O using `SocketAsyncEventArgs` and pooled buffers  
-for **allocation-free** and **thread-safe** network operations.
+A server built with `Dignus.Sockets` typically consists of:
 
----
-
-### 2. Protocol Layer
-Handles **packet framing, serialization, and dispatching** between the socket and user-defined logic.  
-The layer provides clear separation between **Send** and **Receive** for performance and flexibility.
-
-#### Send Path
-- Implemented via `IPacketSerializer`
-- Converts a structured `IPacket` into a sendable byte buffer
-- Used by `Session.Send()` to enqueue data into the `SendBuffer`
-- The send path remains **zero-copy** and lock-protected for thread safety
-
-```csharp
-public interface IPacketSerializer
-{
-    ArraySegment<byte> MakeSendBuffer(IPacket packet);
-}
-```
-
-#### Receive Path
-
-Incoming bytes are processed by the internal receive loop
-implemented in `PacketProcessor`.
-
-The framework manages:
-- receive loop execution
-- buffer advancing
-- session lifetime safety
-- async execution boundaries
-
-Users define packet handling behavior
-by implementing either `PacketProcessor` or `PacketHandlerBase`.
-
-### 3. Packet Handling
-
-### PacketProcessor
-
-Provides full access to `ISession` during:
-- packet framing
-- packet processing
-
-Use this when packet handling logic
-requires direct interaction with the session.
-
-```csharp
-public abstract class PacketProcessor
-{
-    protected abstract bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
-        out ArraySegment<byte> packet, out int consumedBytes);
-
-    protected abstract Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet);
-}
-```
-
-### PacketHandlerBase
-
-A packet-centric abstraction built on top of `PacketProcessor`.
-
-- Does not expose `ISession` in method signatures
-- Suitable when session access is not required directly
-
-```csharp
-public abstract class PacketHandlerBase : PacketProcessor
-{
-    public abstract bool TakeReceivedPacket(ArrayQueue<byte> buffer,
-        out ArraySegment<byte> packet, out int consumedBytes);
-
-    public abstract Task ProcessPacketAsync(ArraySegment<byte> packet);
-}
-```
-
-### Difference
-
-| Type | Session Access | Responsibility |
-|----|---------------|----------------|
-| PacketProcessor | Yes | Session-aware packet framing and processing |
-| PacketHandlerBase | No | Packet-centric processing without session dependency |
+1. Packet format
+2. Packet definition
+3. Dispatch layer
+4. Direct mapper or pipeline binding
+5. Protocol handler
+6. Packet processor
+7. Session setup
+8. Server start
 
 ---
 
-### 4. Dispatch Layer
-Now fully **asynchronous**.
+## 1. Packet Format
 
-`ProtocolHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.
-`ProtocolSessionHandlerMapper` dynamically binds and caches handler delegates (`Task` or `Action`) for each protocol.
-`ProtocolPipelineInvoker` executes those handlers through an async pipeline.
+This example uses:
+
+```text
+[length:int][protocol:int][body:byte[]]
+```
+
+### Fields
+
+- length  
+  size of `[protocol + body]`
+
+- protocol  
+  message identifier
+
+- body  
+  payload (JSON in this example)
+
+### Example
+
+```text
+[12][1001]["hello"]
+```
+
+### Notes
+
+- This format is only an example.
+- The protocol type can be changed.
+- The body format can be changed.
+- Length-based framing must be preserved.
+
+---
+
+## 2. Packet
 
 ```csharp
-await ProtocolHandlerMapper.InvokeHandlerAsync(handler, protocol, body);
+using Dignus.Sockets.Interfaces;
+using System.Text;
 
-await ProtocolSessionHandlerMapper.InvokeHandlerAsync(handler, protocol, session, body);
+internal class Packet : IPacket
+{
+    public int Protocol { get; }
+    public byte[] Body { get; }
+
+    public Packet(int protocol, byte[] body)
+    {
+        Protocol = protocol;
+        Body = body;
+    }
+
+    public Packet(int protocol, string value)
+    {
+        Protocol = protocol;
+        Body = Encoding.UTF8.GetBytes(value);
+    }
+
+    public int GetLength()
+    {
+        return Body.Length + sizeof(int);
+    }
+}
+```
+
+---
+
+## 3. Dispatch Layer
+
+The dispatch layer connects protocol values to handler methods.
+
+### Binding
+
+```csharp
+ProtocolHandlerMapper<EchoHandler, string>.BindProtocol<CSProtocol>();
+```
+
+This step:
+
+- scans handler methods
+- reads mapping attributes
+- builds protocol-to-method bindings
+
+### Invocation
+
+```csharp
+await ProtocolHandlerMapper<EchoHandler, string>.InvokeHandlerAsync(
+    handler,
+    protocol,
+    body);
+```
+
+This step:
+
+- finds the mapped handler method
+- executes it asynchronously
+
+### Available APIs
+
+```csharp
+await ProtocolHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, body);
+
+await ProtocolSessionHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, session, body);
 
 await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(ref context);
 
@@ -127,103 +144,39 @@ await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(ref con
 
 ---
 
-### 5. Direct Mapper Usage
-If you prefer not to use a binder or pipeline, you can bind handlers manually using mappers.
+## 4. Direct Mapper Usage
+
+If you do not need a binder or middleware pipeline, you can bind handlers directly with a mapper.
 
 ```csharp
-// Session-less handler example
 ProtocolHandlerMapper<MyHandler, string>.BindProtocol<MyProtocol>();
 await ProtocolHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, body);
-
-// Session-based handler example
-ProtocolSessionHandlerMapper<MyHandler, string>.BindProtocol<MyProtocol>();
-await ProtocolSessionHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, session, body);
 ```
 
-**When to use:**  
-- Rapid testing or simple systems  
-- No middleware required  
-- You want direct control over binding and invocation
+### When to use
+
+- simple servers
+- rapid testing
+- no middleware
+- direct control over binding and invocation
 
 ---
 
-### 6. Binder Interfaces and Implementations
+## 5. Binder-Based Pipeline Builder
 
-For large-scale or modular servers, binders automate handler binding and invoker creation.
+Use the binder-based pipeline builder for automatic protocol registration and middleware composition in one fluent chain.
 
-```csharp
-// IProtocolInvokerBinder.cs
-public interface IProtocolInvokerBinder<TContext> where TContext : struct
-{
-    HandlerInvokerDelegate<TContext> BindAndCreateInvoker<TProtocol>()
-        where TProtocol : struct, Enum;
-}
-```
+### Recommended Style
 
 ```csharp
-// ProtocolHandlerBinder<TPipelineContext, THandler, TBody>
-public class ProtocolHandlerBinder<TPipelineContext, THandler, TBody> : IProtocolInvokerBinder<TPipelineContext>
-    where TPipelineContext : struct, IPipelineContext<THandler, TBody>
-    where THandler : IProtocolHandler<TBody>
-{
-    public HandlerInvokerDelegate<TPipelineContext> BindAndCreateInvoker<TProtocol>()
-        where TProtocol : struct, Enum
-    {
-        ProtocolHandlerMapper<THandler, TBody>.BindProtocol<TProtocol>();
-
-        return (ref TPipelineContext context) =>
-        {
-            return ProtocolHandlerMapper<THandler, TBody>.InvokeHandlerAsync(
-                context.Handler,
-                context.Protocol,
-                context.Body);
-        };
-    }
-}
-```
-
-```csharp
-// ProtocolHandlerBinder<TPipelineContext, THandler, TBody, TState>
-// example ProtocolHandlerBinder<TPipelineContext, THandler, TBody, ISession>
-public class ProtocolHandlerBinder<TPipelineContext, THandler, TBody, TState> : IProtocolInvokerBinder<TPipelineContext>
-    where TPipelineContext : struct, IPipelineContext<THandler, TBody, TState>
-    where THandler : IProtocolHandler<TBody>
-{
-    public HandlerInvokerDelegate<TPipelineContext> BindAndCreateInvoker<TProtocol>() where TProtocol : struct, Enum
-    {
-        ProtocolStateHandlerMapper<THandler, TBody, TState>.BindProtocol<TProtocol>();
-
-        return (ref TPipelineContext context) =>
-        {
-            return ProtocolStateHandlerMapper<THandler, TBody, TState>.InvokeHandlerAsync(
-                context.Handler,
-                context.Protocol,
-                context.State,
-                context.Body);
-        };
-    }
-}
-```
-
----
-
-### 7. Configuring Pipelines (Recommended)
-
-Use the **binder-based pipeline builder** for automatic protocol registration  
-and middleware composition in one fluent chain.
-
-```csharp
-// Recommended: TContext-only facade (simplified execution)
-
 var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>();
 
-//var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string, ISession>(); //State
+// var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string, ISession>();
 
 ProtocolPipelineInvoker<MiddlewareContext>
     .Bind<CGProtocolHandler, string, MyProtocol>(binder)
     .Use((method, pipeline) =>
     {
-        // Optional middleware
         pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
         {
             Console.WriteLine($"Protocol {context.Protocol} invoked");
@@ -231,14 +184,15 @@ ProtocolPipelineInvoker<MiddlewareContext>
         });
     })
     .Build();
+```
 
+### Legacy Style
 
-// Legacy: still supported
+```csharp
 ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
     .Bind<MyProtocol>(new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>())
     .Use((method, pipeline) =>
     {
-        // Optional middleware
         pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
         {
             Console.WriteLine($"Protocol {context.Protocol} invoked");
@@ -248,169 +202,251 @@ ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
     .Build();
 ```
 
-**Pipeline Steps**
-- `Bind<TProtocol>()` → Selects protocol type and binder (session or non-session).  
-- `Use()` → Registers optional middleware (logging, filters, validation).  
-- `Build()` → Finalizes and stores the async pipeline for runtime execution.
+### Pipeline Steps
+
+- `Bind<TProtocol>()`  
+  selects the protocol type and binder
+
+- `Use()`  
+  registers optional middleware such as logging, filtering, or validation
+
+- `Build()`  
+  finalizes and stores the async pipeline for runtime execution
+
+### When to use
+
+- middleware is required
+- protocol execution needs pre/post processing
+- logging, validation, or filtering should be centralized
+- handler invocation should be composed declaratively
 
 ---
 
-## 8. Example Flow
+## 6. Handler
 
-### Session Setup
 ```csharp
-_serverModule = new ServerModule(
-    new SessionConfiguration(MakeSerializersFuncForClient),
-    ServerEndpointInfo.Port);
-```
+using Dignus.Sockets.Attributes;
+using Dignus.Sockets.Interfaces;
+using System.Text.Json;
 
-#### Context Definition Example
-```csharp
-// 1. Session-less Context
-public struct MiddlewareContext : IPipelineContext<MyHandler, string>
+internal class EchoHandler : IProtocolHandler<string>, ISessionComponent
 {
-    public int Protocol { get; init; }
-    public MyHandler Handler { get; init; }
-    public string Body { get; init; }
-}
+    private ISession _session;
 
-// 2. Session Context
-public struct SessionContext : IPipelineContext<MyHandler, string, ISession>
-{
-    public int Protocol { get; init; }
-    public MyHandler Handler { get; init; }
-    public string Body { get; init; }
-    public ISession State { get; init; }
-}
-```
-
-### Handler Example
-```csharp
-
-[Injectable(Dignus.DependencyInjection.LifeScope.Transient)]
-public class CGProtocolHandler(HeartBeat heartBeat,
-    RoomManager roomManager) : IProtocolHandler<string>, ISessionComponent
-{
-    protected ISession _session;
     public T DeserializeBody<T>(string body)
     {
         return JsonSerializer.Deserialize<T>(body);
     }
 
-    [ProtocolName("SendPong")]
-    public Task Process(SendPong _)
+    [ProtocolName("EchoMessage")]
+    public void Process(EchoMessage echo)
     {
-        heartBeat.Pong();
-        return Task.CompletedTask;
+        var body = JsonSerializer.Serialize(echo);
+        _session.SendAsync(new Packet((int)SCProtocol.EchoMessageResponse, body));
     }
-    public void Dispose()
+
+    public void OtherMessage(OtherMessage otherMessage)
     {
-        if (_player != null)
-        {
-            if (_player.GameRoom != null)
-            {
-                _gameRoomManager.LeaveRoom(_player);
-            }
-            _gameRoomManager.RemovePlayer(_player);
-            _player = null;
-        }
-        heartBeat.Dispose();
-        _session = null;
+        var body = JsonSerializer.Serialize(otherMessage);
+        _session.SendAsync(new Packet((int)SCProtocol.OtherMessageResponse, body));
     }
 
     public void SetSession(ISession session)
     {
         _session = session;
+    }
 
-        foreach (var component in _session.GetSessionComponents())
-        {
-        }
+    public void Dispose()
+    {
+        _session = null;
     }
 }
 ```
 
+### Key Points
+
+- `BindProtocol()` reads handler metadata during initialization
+- protocol values are automatically mapped to handler methods
+- `InvokeHandlerAsync()` executes the mapped method
+- `ISessionComponent` allows the handler to receive the current session
+
 ---
 
-### 9. Dispatch Flow Example (Runtime Execution)
-
-The packet handler connects the low-level socket receive loop  
-with the high-level protocol execution pipeline.
+## 7. Packet Processor
 
 ```csharp
 using Dignus.Collections;
-using Dignus.Log;
-using Dignus.Sockets;
 using Dignus.Sockets.Interfaces;
 using Dignus.Sockets.Processing;
 using System.Text;
 
-internal class PacketHandler : StatelessPacketHandlerBase
+internal class PacketProcessor(EchoHandler echoHandler)
+    : SessionlessPacketProcessor, IPacketSerializer
 {
-    private const int HeaderSize = sizeof(int);
-    private const int ProtocolSize = sizeof(ushort);
+    private const int HeaderSize = sizeof(int) * 2;
+    private const int SizeToInt = sizeof(int);
 
-    private readonly CSProtocolHandler _protocolHandler;
-    public PacketHandler(CSProtocolHandler csProtocolHandler)
+    public override async Task ProcessPacketAsync(ArraySegment<byte> packet)
     {
-        _protocolHandler = csProtocolHandler;
+        var protocol = BitConverter.ToInt32(packet.Array, packet.Offset);
+        var size = packet.Count - SizeToInt;
+        var bodyString = Encoding.UTF8.GetString(packet.Array, packet.Offset + SizeToInt, size);
+
+        await ProtocolHandlerMapper<EchoHandler, string>.InvokeHandlerAsync(
+            echoHandler,
+            protocol,
+            bodyString);
     }
 
-    public override bool TakeReceivedPacket(ISession session, ArrayQueue<byte> buffer,
-        out ArraySegment<byte> packet, out int consumedBytes)
+    public ArraySegment<byte> MakeSendBuffer(IPacket packet)
+    {
+        var sendPacket = (Packet)packet;
+
+        var packetSize = sendPacket.GetLength();
+        byte[] buffer = new byte[packetSize + SizeToInt];
+
+        Buffer.BlockCopy(BitConverter.GetBytes(packetSize), 0, buffer, 0, SizeToInt);
+        Buffer.BlockCopy(BitConverter.GetBytes(sendPacket.Protocol), 0, buffer, SizeToInt, SizeToInt);
+        Buffer.BlockCopy(sendPacket.Body, 0, buffer, HeaderSize, sendPacket.Body.Length);
+
+        return buffer;
+    }
+
+    public override bool TakeReceivedPacket(
+        ArrayQueue<byte> buffer,
+        out ArraySegment<byte> packet,
+        out int consumedBytes)
     {
         packet = null;
         consumedBytes = 0;
-        if (buffer.Count < HeaderSize)
+
+        if (buffer.Count < SizeToInt)
             return false;
 
-        var bodySize = BitConverter.ToInt32(buffer.Peek(HeaderSize));
-        if (buffer.Count < HeaderSize + bodySize)
+        var length = BitConverter.ToInt32(buffer.Peek(SizeToInt));
+
+        if (buffer.Count < length + SizeToInt)
             return false;
 
-        buffer.TryReadBytes(out _, HeaderSize);
-        consumedBytes = bodySize;
-        return buffer.TrySlice(out packet, bodySize);
-    }
+        if (buffer.TryReadBytes(out _, SizeToInt) == false)
+            return false;
 
-    public override async Task ProcessPacketAsync(ISession session, ArraySegment<byte> packet)
-    {
-        var protocol = BitConverter.ToInt16(packet);
+        if (buffer.TrySlice(out packet, length) == false)
+            return false;
 
-        if (ProtocolHandlerMapper.ValidateProtocol<CSProtocolHandler>(protocol) == false)
-        {
-            LogHelper.Error($"[Server] Invalid protocol: {protocol}");
-            return;
-        }
-
-        var body = Encoding.UTF8.GetString(
-            packet.Array, packet.Offset + ProtocolSize, packet.Count - ProtocolSize);
-
-        var context = new PipeContext()
-        {
-            Handler = _protocolHandler,
-            Session = session,
-            Protocol = protocol,
-            Body = body
-        };
-
-        // Legacy: still supported
-        //await ProtocolPipelineInvoker<PipeContext, CSProtocolHandler, string>.ExecuteAsync(protocol, ref context);
-
-        // Recommended: simplified execution (TContext-only)
-        await ProtocolPipelineInvoker<PipeContext>.ExecuteAsync(ref context);
+        consumedBytes = length;
+        return true;
     }
 }
 ```
 
 ---
 
-#### Design Principles
+## 8. Session Setup
 
-- Async and allocation-free networking hot paths
-- Optional TLS support without architectural changes
-- Clear separation of Send / Receive paths
-- Precompiled or delegate-based protocol dispatch
-- Middleware-based handler extension
-- Modular, allocation-free architecture
+```csharp
+static SessionSetup PacketHandlerSetupFactory()
+{
+    EchoHandler handler = new();
+    PacketProcessor processor = new(handler);
+
+    return new SessionSetup(
+        processor,
+        processor,
+        [handler]);
+}
+```
+
+### Structure
+
+- first argument  
+  receive-side processor
+
+- second argument  
+  send-side serializer
+
+- third argument  
+  session components
+
+---
+
+## 9. Server
+
+```csharp
+using Dignus.Sockets;
+using Dignus.Sockets.Tcp;
+
+internal class EchoServer : TcpServerBase
+{
+    public EchoServer(SessionConfiguration config) : base(config)
+    {
+        ProtocolHandlerMapper<EchoHandler, string>.BindProtocol<CSProtocol>();
+    }
+}
+```
+
+---
+
+## 10. Start
+
+```csharp
+var config = new SessionConfiguration(PacketHandlerSetupFactory);
+var server = new EchoServer(config);
+
+server.Start(5000);
+```
+
+---
+
+## Runtime Flow
+
+1. receive bytes
+2. split one packet
+3. parse protocol and body
+4. dispatch to the mapped handler
+5. serialize the response
+6. send the response
+
+---
+
+## Choosing an Execution Style
+
+### Direct Mapper
+
+Use this when:
+
+- the server is simple
+- middleware is unnecessary
+- direct binding is preferred
+
+### Pipeline Builder
+
+Use this when:
+
+- middleware is needed
+- cross-cutting concerns should be centralized
+- protocol execution should be composed through a fluent builder
+
+---
+
+## Summary
+
+- Packet  
+  defines protocol and body
+
+- Packet Processor  
+  handles framing and parsing
+
+- Mapper  
+  dispatches protocols directly
+
+- Pipeline  
+  composes protocol execution with middleware
+
+- Handler  
+  contains business logic
+
+- Session  
+  sends and receives data
 
 ---
