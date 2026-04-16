@@ -1,7 +1,8 @@
+````md
 # Dignus.Sockets
 
 **Dignus.Sockets** is a high-performance C# TCP/TLS/UDP server framework.  
-It provides async socket processing, custom packet serialization, protocol-based dispatch, and middleware-capable protocol pipelines.
+It provides async socket processing, custom packet serialization, protocol-based dispatch, and middleware-capable pipelines.
 
 > Benchmark: https://github.com/EomTaeWook/ServerPerformanceBenchmark
 
@@ -12,9 +13,9 @@ It provides async socket processing, custom packet serialization, protocol-based
 - Async TCP/TLS/UDP networking
 - Custom packet framing and serialization
 - Protocol-based handler dispatch
-- Direct mapper-based invocation
-- Binder-based pipeline builder
-- Optional middleware composition
+- Direct mapper-based execution
+- Binder-based pipeline system
+- Middleware composition support
 - Session component model
 
 ---
@@ -26,7 +27,7 @@ A server built with `Dignus.Sockets` typically consists of:
 1. Packet format
 2. Packet definition
 3. Dispatch layer
-4. Direct mapper or pipeline binding
+4. Direct mapper or pipeline
 5. Protocol handler
 6. Packet processor
 7. Session setup
@@ -62,8 +63,8 @@ This example uses:
 ### Notes
 
 - This format is only an example.
-- The protocol type can be changed.
-- The body format can be changed.
+- Protocol type can be changed.
+- Body format can be changed.
 - Length-based framing must be preserved.
 
 ---
@@ -102,7 +103,7 @@ internal class Packet : IPacket
 
 ## 3. Dispatch Layer
 
-The dispatch layer connects protocol values to handler methods.
+The dispatch layer maps protocol values to handler methods.
 
 ### Binding
 
@@ -130,16 +131,12 @@ This step:
 - finds the mapped handler method
 - executes it asynchronously
 
-### Available APIs
+### Available Mapper APIs
 
 ```csharp
 await ProtocolHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, body);
 
 await ProtocolSessionHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, protocol, session, body);
-
-await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(ref context);
-
-await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(ref context);
 ```
 
 ---
@@ -162,11 +159,19 @@ await ProtocolHandlerMapper<MyHandler, string>.InvokeHandlerAsync(handler, proto
 
 ---
 
-## 5. Binder-Based Pipeline Builder
+## 5. Pipeline
 
-Use the binder-based pipeline builder for automatic protocol registration and middleware composition in one fluent chain.
+`Dignus.Sockets` provides a binder-based pipeline system for protocol execution.
 
-### Recommended Style
+It supports:
+
+- automatic protocol binding
+- middleware composition
+- async execution pipeline
+
+### Pipeline Builder (Recommended)
+
+Use the binder-based builder for automatic protocol registration and middleware composition.
 
 ```csharp
 var binder = new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>();
@@ -186,20 +191,18 @@ ProtocolPipelineInvoker<MiddlewareContext>
     .Build();
 ```
 
-### Legacy Style
+### Pipeline Execution
+
+#### Recommended
 
 ```csharp
-ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
-    .Bind<MyProtocol>(new ProtocolHandlerBinder<MiddlewareContext, CGProtocolHandler, string>())
-    .Use((method, pipeline) =>
-    {
-        pipeline.Use((ref MiddlewareContext context, ref AsyncPipelineNext<MiddlewareContext> next) =>
-        {
-            Console.WriteLine($"Protocol {context.Protocol} invoked");
-            return next.InvokeAsync(ref context);
-        });
-    })
-    .Build();
+await ProtocolPipelineInvoker<MyContext>.ExecuteAsync(ref context);
+```
+
+#### Legacy
+
+```csharp
+await ProtocolPipelineInvoker<MyContext, MyHandler, string>.ExecuteAsync(ref context);
 ```
 
 ### Pipeline Steps
@@ -208,17 +211,26 @@ ProtocolPipelineInvoker<MiddlewareContext, CGProtocolHandler, string>
   selects the protocol type and binder
 
 - `Use()`  
-  registers optional middleware such as logging, filtering, or validation
+  registers middleware such as logging, validation, or filtering
 
 - `Build()`  
-  finalizes and stores the async pipeline for runtime execution
+  finalizes the pipeline configuration
+
+- `ExecuteAsync()`  
+  runs the pipeline for the given context
 
 ### When to use
 
 - middleware is required
-- protocol execution needs pre/post processing
 - logging, validation, or filtering should be centralized
+- protocol execution needs pre/post processing
 - handler invocation should be composed declaratively
+
+### Notes
+
+- `ProtocolPipelineInvoker<MyContext>` is the recommended API for new code.
+- `ProtocolPipelineInvoker<MyContext, MyHandler, string>` is the legacy form.
+- Both execute the configured async pipeline.
 
 ---
 
@@ -265,10 +277,10 @@ internal class EchoHandler : IProtocolHandler<string>, ISessionComponent
 
 ### Key Points
 
-- `BindProtocol()` reads handler metadata during initialization
-- protocol values are automatically mapped to handler methods
-- `InvokeHandlerAsync()` executes the mapped method
-- `ISessionComponent` allows the handler to receive the current session
+- `BindProtocol()` reads handler metadata during initialization.
+- Protocol values are automatically mapped to handler methods.
+- `InvokeHandlerAsync()` executes the mapped method.
+- `ISessionComponent` allows the handler to receive the current session.
 
 ---
 
@@ -419,7 +431,7 @@ Use this when:
 - middleware is unnecessary
 - direct binding is preferred
 
-### Pipeline Builder
+### Pipeline
 
 Use this when:
 
