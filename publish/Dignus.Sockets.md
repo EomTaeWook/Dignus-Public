@@ -1,4 +1,3 @@
-````md
 # Dignus.Sockets
 
 **Dignus.Sockets** is a high-performance C# TCP/TLS/UDP server framework.  
