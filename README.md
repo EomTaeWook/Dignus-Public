@@ -6,6 +6,9 @@
 **High-performance modular framework ecosystem focused on runtime efficiency and GC avoidance.**  
 All modules are designed for performance-critical environments with zero-copy and zero-GC architecture.
 
+This repository is a public open-source distribution of the Dignus Library ecosystem.  
+The original development repository is private, and the project has been maintained since 2021.
+
 ---
 
 ## Modules
@@ -25,6 +28,6 @@ All modules are designed for performance-critical environments with zero-copy an
 
 - **Zero Allocation:** Designed to eliminate GC overhead during runtime  
 - **Zero-Copy Architecture:** Direct buffer access across networking layers  
-- **Precompiled Execution:** Avoids reflection for high-performance runtime paths 
+- **Precompiled Execution:** Avoids reflection for high-performance runtime paths  
 - **Thread-Safe Design:** Synchronized variants for concurrent environments  
-- **Extensible and Modular:** Each module can operate independently or as part of a full-stack system  
+- **Extensible and Modular:** Each module can operate independently or as part of a full-stack system
