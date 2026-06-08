@@ -420,6 +420,23 @@ server.Start(5000);
 
 ---
 
+## Send vs SendAsync
+
+`Dignus.Sockets` provides both synchronous and asynchronous send paths.
+
+Both APIs use the same internal send path, so message ordering and send consistency are preserved in the same way.
+
+The difference is how the send loop is executed.
+
+`Send` executes the send loop directly on the current calling thread.  
+`SendAsync` schedules the send loop to the ThreadPool through `Task.Run`.
+
+Because of this, `SendAsync` can introduce additional scheduling overhead, allocation, and GC pressure compared with `Send`.
+
+Use `Send` when the send loop should run on the current calling thread.  
+Use `SendAsync` when the send loop should be scheduled to the ThreadPool.
+
+---
 ## Choosing an Execution Style
 
 ### Direct Mapper
