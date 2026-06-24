@@ -1,63 +1,70 @@
 # Dignus.Core
 
-**Shared runtime foundation for the Dignus ecosystem**  
-Provides the low-level building blocks used across Dignus libraries, including collections, dependency injection, coroutine scheduling, object pooling, and pipeline utilities.
+**Shared runtime foundation for the Dignus ecosystem.**
+
+Provides common runtime components used across Dignus libraries, including collections, dependency injection, coroutine scheduling, object pooling, and pipeline utilities.
 
 ---
 
 ## Overview
 
-- Base runtime library used by other Dignus modules.  
-- Includes performance-oriented collections, lightweight dependency injection, deterministic coroutine scheduling, and reusable framework utilities.  
-- Designed for performance-oriented runtime systems, with a focus on high-throughput execution.
+* Base runtime library shared by Dignus modules.
+* Includes performance-oriented collections, lightweight dependency injection, deterministic coroutine scheduling, and reusable framework utilities.
+* Designed for high-throughput runtime systems with minimal allocation in steady-state execution paths.
 
 ---
 
 ## Namespaces
 
-| Namespace | Description |
-| :--- | :--- |
-| **Dignus.Collections** | Zero-GC collections including ArrayQueue, CompactableArrayQueue, and UniqueSet. |
-| **Dignus.Coroutine** | Lightweight coroutine handler with deterministic updates. |
-| **Dignus.DependencyInjection** | Minimal DI container with constructor and property injection support. |
-| **Dignus.Framework** | Object pooling, singleton, and pipeline utilities for performance-critical systems. |
+| Namespace                      | Description                                                                     |
+| :----------------------------- | :------------------------------------------------------------------------------ |
+| **Dignus.Collections**         | Array-based collections and concurrent queue implementations.                   |
+| **Dignus.Coroutine**           | Lightweight coroutine scheduling with deterministic updates.                    |
+| **Dignus.DependencyInjection** | Minimal dependency injection container with constructor and property injection. |
+| **Dignus.Framework**           | Object pooling, singleton, and pipeline utilities.                              |
 
 ---
 
 ## Modules
 
 ### Dignus.Collections
-Contains zero-allocation, array-based and set-based data structures.
 
-- `ArrayQueue<T>` — expandable queue optimized for sequential reads/writes.  
-- `CompactableArrayQueue<T>` — auto-compacting queue that reuses cleared slots.  
-- `UniqueSet<T>` — custom hash-based unique collection with minimal allocation.  
-- `SynchronizedArrayQueue<T>` / `SynchronizedUniqueSet<T>` — thread-safe wrappers.
-- `MpscBoundedQueue<T>` — fixed-capacity multi-producer, single-consumer queue optimized for lock-free enqueue and single-threaded dequeue.
+Contains array-based collections and multi-producer, single-consumer queues.
+
+* `ArrayQueue<T>` — expandable queue optimized for sequential reads and writes.
+* `CompactableArrayQueue<T>` — queue that reuses cleared slots through compaction.
+* `UniqueSet<T>` — custom hash-based unique collection.
+* `SynchronizedArrayQueue<T>` / `SynchronizedUniqueSet<T>` — synchronized wrappers for concurrent access.
+* `MpscBoundedQueue<T>` — fixed-capacity multi-producer, single-consumer queue with lock-free enqueue and single-threaded dequeue.
+* `MpscUnboundedQueue<T>` — unbounded multi-producer, single-consumer queue with lock-free enqueue and single-threaded dequeue.
 
 ### Dignus.Coroutine
-Implements allocation-free coroutine scheduling.
 
-- `CoroutineHandle` — represents an active coroutine instance.  
-- `CoroutineHandler` — manages coroutine lifecycles and nested enumerators.  
-- `DelayInSeconds`, `DelayInMilliseconds`, `WaitWhile` — built-in wait conditions.
+Implements deterministic coroutine scheduling.
+
+* `CoroutineHandle` — represents an active coroutine.
+* `CoroutineHandler` — manages coroutine execution, lifecycle, and nested enumerators.
+* `DelayInSeconds`, `DelayInMilliseconds`, `WaitWhile` — built-in wait conditions.
 
 ### Dignus.DependencyInjection
-Minimal, high-speed dependency injection framework.
 
-- `ServiceContainer`, `ServiceProvider`, `ServiceCollection` — container infrastructure.  
-- `ServiceRegistration` — metadata for registered services and factories.  
-- `LifeScope` — defines lifetime (`Transient` / `Singleton`).  
-- `ConstructorDelegateFactory` — builds and caches fast constructor delegates for registered services.  
-- `InjectableAttribute`, `InjectAttribute`, `InjectConstructorAttribute` — attribute-driven registration.  
-- `ServiceContainerExtensions`, `ServiceCollectionExtensions`, `ServiceProviderExtensions` — helper APIs for simplified registration and resolution.
+Provides lightweight service registration and resolution.
+
+* `ServiceContainer`, `ServiceProvider`, `ServiceCollection` — container infrastructure.
+* `ServiceRegistration` — registration metadata for services and factories.
+* `LifeScope` — service lifetime definition: `Transient` or `Singleton`.
+* `ConstructorDelegateFactory` — creates and caches constructor delegates.
+* `InjectableAttribute`, `InjectAttribute`, `InjectConstructorAttribute` — attribute-based registration and injection.
+* `ServiceContainerExtensions`, `ServiceCollectionExtensions`, `ServiceProviderExtensions` — registration and resolution helpers.
 
 ### Dignus.Framework
-Utility layer providing reusable object and execution management systems.
 
-- `ObjectPoolBase<T>` / `ObjectPool<T>` — memory-stable pooling mechanism.  
-- `Singleton<T>` — thread-safe lazy singleton helper.  
-- `AsyncPipeline<TContext>` — allocation-free async middleware pipeline using ref-based context passing.  
-  - `AsyncPipelineDelegate<TContext>` — delegate signature for middleware functions.  
-  - `AsyncPipelineNext<TContext>` — continuation struct controlling next middleware execution.  
-  - `IAsyncMiddleware<TContext>` / `AsyncHandlerMiddleware<TContext>` — interface and adapter for composing pipelines.  
+Provides reusable memory and execution utilities.
+
+* `ObjectPoolBase<T>` / `ObjectPool<T>` — reusable object pooling infrastructure.
+* `Singleton<T>` — thread-safe lazy singleton helper.
+* `AsyncPipeline<TContext>` — async middleware pipeline using ref-based context passing.
+
+  * `AsyncPipelineDelegate<TContext>` — middleware delegate signature.
+  * `AsyncPipelineNext<TContext>` — continuation used to invoke the next middleware.
+  * `IAsyncMiddleware<TContext>` / `AsyncHandlerMiddleware<TContext>` — middleware interface and delegate adapter.
