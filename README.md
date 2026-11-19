@@ -22,6 +22,7 @@ The original development repository is private, and the project has been maintai
 | [**Dignus.Log**](https://github.com/EomTaeWook/Dignus.Log/blob/main/publish/Dignus.Log.md) | Attribute-driven logging system with configurable targets | [![NuGet](https://img.shields.io/nuget/v/Dignus.Log.svg)](https://www.nuget.org/packages/Dignus.Log) |
 | [**Dignus.Extensions.Logging**](https://github.com/EomTaeWook/Dignus.Log/blob/main/publish/Dignus.Extensions.Logging.md) | Integration with Microsoft.Extensions.Logging | [![NuGet](https://img.shields.io/nuget/v/Dignus.Extensions.Logging.svg)](https://www.nuget.org/packages/Dignus.Extensions.Logging) |
 | [**Dignus.Unity**](https://github.com/EomTaeWook/Dignus.Unity) | Unity integration package distributed through Unity Package Manager | [![NuGet](https://img.shields.io/nuget/v/Dignus.Unity.svg)](https://www.nuget.org/packages/Dignus.Unity) |
+| [**Dignus.Godot**](https://github.com/EomTaeWook/Dignus.Godot) | Godot .NET integration with dependency injection, scene lifecycle management, resource loading, node pooling, coroutines, and value change notifications | [![NuGet](https://img.shields.io/nuget/v/Dignus.Godot.svg)](https://www.nuget.org/packages/Dignus.Godot) |
 | [**Dignus.Commands**](https://github.com/EomTaeWook/Dignus.Commands) | Modular command framework for local and Telnet-based execution, with hierarchical command paths and middleware pipeline support | [![NuGet](https://img.shields.io/nuget/v/Dignus.Commands.svg)](https://www.nuget.org/packages/Dignus.Commands) |
 
 ---
